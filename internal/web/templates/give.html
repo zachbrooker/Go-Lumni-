@@ -7,6 +7,10 @@
 
   {{if .Open}}
   <form method="post" action="/give/{{.Campaign.ID}}" class="card give stack">
+    <label>How would you like to give?
+      <select name="method">{{range methods}}<option value="{{.}}">{{methodLabel .}}</option>{{end}}</select>
+    </label>
+    <p class="muted small">Stock: you deduct full market value and pay no capital-gains tax. Donor-advised fund: we prepare the grant recommendation. IRA: donors 70½+ can give directly, tax-free. A tax receipt is issued for every gift.</p>
     <div class="amounts">
       {{range $a := amounts}}<button type="button" class="quiet" data-amount="{{$a}}">${{$a}}</button>{{end}}
     </div>

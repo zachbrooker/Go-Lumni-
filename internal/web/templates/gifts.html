@@ -14,7 +14,7 @@
 <section class="card">
   {{if .Gifts}}
   <table>
-    <thead><tr><th>When</th><th>Donor</th><th>Kind</th><th>Campaign</th><th class="num">Amount</th><th class="num">Matched</th><th>Message</th></tr></thead>
+    <thead><tr><th>When</th><th>Donor</th><th>Kind</th><th>Campaign</th><th>How</th><th class="num">Amount</th><th class="num">Matched</th><th>Message</th></tr></thead>
     <tbody>
     {{$c := .Campaigns}}
     {{range .Gifts}}
@@ -23,6 +23,7 @@
       <td class="strong">{{.DonorName}}{{if .Anonymous}} <span class="muted small">(anon.)</span>{{end}}<br><span class="muted small">{{.DonorEmail}}</span></td>
       <td class="muted">{{.DonorKind}}</td>
       <td>{{index $c .CampaignID}}</td>
+      <td class="small">{{methodLabel .Method}}{{if .Pending}} <span class="pill">pending</span>{{end}}{{if .EmployerMatch}} <span class="pill">match?</span>{{end}}</td>
       <td class="num">{{money .AmountCents}}{{if .Major}} <span class="pill accent">major</span>{{end}}</td>
       <td class="num muted">{{if .MatchedCents}}{{money .MatchedCents}}{{end}}</td>
       <td class="muted small">{{.Message}}</td>

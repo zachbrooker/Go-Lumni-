@@ -444,20 +444,58 @@ const PlatformFeeBps = 400
 // Fee returns Lumni's platform fee on a gift of amountCents.
 func Fee(amountCents int64) int64 { return amountCents * PlatformFeeBps / 10_000 }
 
+// Gift methods. Card gifts clear immediately; the others are recorded as
+// pledged and confirmed when the transfer, grant or distribution arrives.
+const (
+	MethodCard    = "card"
+	MethodStock   = "stock"   // appreciated securities transferred to the school's brokerage account
+	MethodDAF     = "daf"     // grant recommended from a donor-advised fund
+	MethodMonthly = "monthly" // recurring card gift
+	MethodIRA     = "ira"     // qualified charitable distribution from an IRA
+	MethodCheck   = "check"
+	MethodWire    = "wire"
+)
+
+// Methods lists every gift method, in display order.
+var Methods = []string{MethodCard, MethodStock, MethodDAF, MethodMonthly, MethodIRA, MethodCheck, MethodWire}
+
+// MethodLabel is a method's human-readable name.
+func MethodLabel(m string) string {
+	switch m {
+	case MethodCard:
+		return "Card"
+	case MethodStock:
+		return "Stock"
+	case MethodDAF:
+		return "Donor-advised fund"
+	case MethodMonthly:
+		return "Monthly"
+	case MethodIRA:
+		return "IRA gift"
+	case MethodCheck:
+		return "Check"
+	case MethodWire:
+		return "Wire"
+	}
+	return m
+}
+
 // Donation is a gift to a campaign, optionally tied to a community member.
 type Donation struct {
-	ID           string    `json:"id"`
-	CampaignID   string    `json:"campaign_id"`
-	MemberID     string    `json:"member_id,omitempty"`
-	DonorName    string    `json:"donor_name"`
-	DonorEmail   string    `json:"donor_email,omitempty"` // used to link the gift to a member when MemberID is empty
-	DonorKind    string    `json:"donor_kind,omitempty"`  // member kind label at time of gift, for the wall
-	AmountCents  int64     `json:"amount_cents"`
-	MatchedCents int64     `json:"matched_cents"`
-	FeeCents     int64     `json:"fee_cents"` // Lumni's platform fee, taken from AmountCents
-	Message      string    `json:"message,omitempty"`
-	Anonymous    bool      `json:"anonymous"`
-	CreatedAt    time.Time `json:"created_at"`
+	ID            string    `json:"id"`
+	CampaignID    string    `json:"campaign_id"`
+	Method        string    `json:"method"`
+	EmployerMatch bool      `json:"employer_match"` // donor asked Lumni to check for a corporate match
+	MemberID      string    `json:"member_id,omitempty"`
+	DonorName     string    `json:"donor_name"`
+	DonorEmail    string    `json:"donor_email,omitempty"` // used to link the gift to a member when MemberID is empty
+	DonorKind     string    `json:"donor_kind,omitempty"`  // member kind label at time of gift, for the wall
+	AmountCents   int64     `json:"amount_cents"`
+	MatchedCents  int64     `json:"matched_cents"`
+	FeeCents      int64     `json:"fee_cents"` // Lumni's platform fee, taken from AmountCents
+	Message       string    `json:"message,omitempty"`
+	Anonymous     bool      `json:"anonymous"`
+	CreatedAt     time.Time `json:"created_at"`
 }
 
 // MinDonationCents is the smallest accepted gift ($1).
@@ -478,6 +516,12 @@ func (d *Donation) Validate() error {
 			return invalid("donor_email is not a valid email")
 		}
 	}
+	if d.Method == "" {
+		d.Method = MethodCard
+	}
+	if MethodLabel(d.Method) == d.Method {
+		return invalid("method must be one of %v", Methods)
+	}
 	if d.DonorName == "" && d.MemberID == "" && d.DonorEmail == "" {
 		return invalid("donor_name, donor_email or member_id is required")
 	}
@@ -486,6 +530,12 @@ func (d *Donation) Validate() error {
 
 // Major reports whether the gift is large enough to warrant personal follow-up.
 func (d Donation) Major() bool { return d.AmountCents >= MajorGiftCents }
+
+// Pending reports whether the gift is a pledge awaiting a transfer, grant or
+// distribution rather than money already received.
+func (d Donation) Pending() bool {
+	return d.Method == MethodStock || d.Method == MethodDAF || d.Method == MethodIRA || d.Method == MethodCheck || d.Method == MethodWire
+}
 
 // Public returns the donation as shown on a public donor wall.
 func (d Donation) Public() Donation {

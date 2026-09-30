@@ -87,14 +87,16 @@ var funcs = template.FuncMap{
 		}
 		return strings.ToUpper(s[:1])
 	},
-	"sub":       func(a, b int64) int64 { return a - b },
-	"inc":       func(i int) int { return i + 1 },
-	"mod":       func(a, b int) int { return a % b },
-	"amounts":   func() []int { return []int{100, 250, 1000, 5000} },
-	"kinds":     func() []lumni.MemberKind { return lumni.Kinds },
-	"grades":    func() []string { return lumni.Grades },
-	"kindCount": func(m map[lumni.MemberKind]int, k lumni.MemberKind) int { return m[k] },
-	"kindCents": func(m map[lumni.MemberKind]int64, k lumni.MemberKind) int64 { return m[k] },
+	"sub":         func(a, b int64) int64 { return a - b },
+	"inc":         func(i int) int { return i + 1 },
+	"mod":         func(a, b int) int { return a % b },
+	"amounts":     func() []int { return []int{100, 250, 1000, 5000} },
+	"kinds":       func() []lumni.MemberKind { return lumni.Kinds },
+	"methods":     func() []string { return lumni.Methods },
+	"methodLabel": lumni.MethodLabel,
+	"grades":      func() []string { return lumni.Grades },
+	"kindCount":   func(m map[lumni.MemberKind]int, k lumni.MemberKind) int { return m[k] },
+	"kindCents":   func(m map[lumni.MemberKind]int64, k lumni.MemberKind) int64 { return m[k] },
 	"threshold": func(c lumni.Challenge) string {
 		if c.Metric == lumni.MetricDollars {
 			return money(c.Threshold)
@@ -516,12 +518,14 @@ func (h *Handler) donate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d := lumni.Donation{
-		MemberID:    r.FormValue("member_id"),
-		DonorName:   r.FormValue("donor_name"),
-		DonorEmail:  r.FormValue("donor_email"),
-		AmountCents: amount,
-		Message:     strings.TrimSpace(r.FormValue("message")),
-		Anonymous:   r.FormValue("anonymous") != "",
+		MemberID:      r.FormValue("member_id"),
+		DonorName:     r.FormValue("donor_name"),
+		DonorEmail:    r.FormValue("donor_email"),
+		AmountCents:   amount,
+		Method:        r.FormValue("method"),
+		EmployerMatch: r.FormValue("employer_match") != "",
+		Message:       strings.TrimSpace(r.FormValue("message")),
+		Anonymous:     r.FormValue("anonymous") != "",
 	}
 	out, err := h.store.Donate(id, d)
 	if err != nil {
@@ -529,6 +533,21 @@ func (h *Handler) donate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	msg := "Thank you! Your gift of " + money(out.AmountCents) + " is in."
+	switch out.Method {
+	case lumni.MethodStock:
+		msg += " Transfer instructions for the school's brokerage account are on their way; your receipt will show the market value on the transfer date."
+	case lumni.MethodDAF:
+		msg += " Your donor-advised fund grant recommendation is ready to send."
+	case lumni.MethodIRA:
+		msg += " Instructions for your IRA custodian are on their way."
+	case lumni.MethodMonthly:
+		msg += " You'll be charged monthly; a year-end statement covers every gift."
+	default:
+		msg += " Your tax receipt has been emailed."
+	}
+	if out.EmployerMatch {
+		msg += " We'll check whether your employer matches gifts."
+	}
 	if out.Major() {
 		msg += " The advancement office will reach out personally."
 	}

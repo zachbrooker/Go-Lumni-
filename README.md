@@ -16,6 +16,7 @@ This repo is the concept build: a Go server (standard library only, in-memory st
 
 **Giving that fits how schools actually raise money**
 - **Share-a-link giving** (`/give/…`): one screen, name, email, any amount. If the email matches someone in the directory, the gift is linked to them automatically, so the school knows which alumni and parents gave with no logins.
+- **Every way people give**: card, appreciated stock, donor-advised fund grants, monthly, IRA qualified charitable distributions, check and wire. Non-card gifts are recorded as pending until the transfer lands. Donors can ask Lumni to check for an employer match. Every gift gets a tax receipt.
 - **Major gifts** ($10K+) are flagged on the dashboard for personal follow-up by the Head of School.
 - **Campaigns** with a story, goal, optional deadline, and live progress.
 - **Giving Days**: a timed campaign with **challenges** ("first 5 gifts unlock $25K from the Whitfields", "10 alumni gifts unlock $50K", "Grade 7 reaching $20K unlocks $20K"), **sponsor matching**, and live-updating totals.
@@ -61,7 +62,7 @@ All routes are prefixed with `/api`. Money is integer cents.
 | POST / GET | `/schools/{id}/campaigns` | Create or list campaigns (`kind`: `campaign` or `giving_day`; giving days need `starts_at` and `deadline`) |
 | GET | `/campaigns/{id}` | Campaign with progress |
 | GET | `/campaigns/{id}/live` | Small payload the page polls: totals, challenges, participation |
-| POST | `/campaigns/{id}/donations` | Give (`amount_cents`, plus `member_id`, `donor_email` or `donor_name`; `message`, `anonymous`) |
+| POST | `/campaigns/{id}/donations` | Give (`amount_cents`, plus `member_id`, `donor_email` or `donor_name`; `method` card/stock/daf/monthly/ira/check/wire; `employer_match`, `message`, `anonymous`) |
 | GET | `/campaigns/{id}/donations` | Donor wall, newest first |
 | GET | `/campaigns/{id}/leaderboard?by=class\|grade` | Participation and dollars by class year or grade |
 | POST | `/campaigns/{id}/challenges` | Add a challenge |
