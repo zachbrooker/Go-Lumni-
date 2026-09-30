@@ -42,16 +42,18 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /schools/{schoolID}", s.getSchool)
 	s.mux.HandleFunc("GET /schools/{schoolID}/insights", s.insights)
 
-	s.mux.HandleFunc("POST /schools/{schoolID}/alumni", s.createAlumnus)
-	s.mux.HandleFunc("GET /schools/{schoolID}/alumni", s.listAlumni)
-	s.mux.HandleFunc("GET /schools/{schoolID}/alumni/{alumnusID}", s.getAlumnus)
-	s.mux.HandleFunc("PATCH /schools/{schoolID}/alumni/{alumnusID}", s.updateAlumnus)
+	s.mux.HandleFunc("POST /schools/{schoolID}/members", s.createMember)
+	s.mux.HandleFunc("GET /schools/{schoolID}/members", s.listMembers)
+	s.mux.HandleFunc("GET /schools/{schoolID}/members/{memberID}", s.getMember)
+	s.mux.HandleFunc("PATCH /schools/{schoolID}/members/{memberID}", s.updateMember)
 
 	s.mux.HandleFunc("POST /schools/{schoolID}/campaigns", s.createCampaign)
 	s.mux.HandleFunc("GET /schools/{schoolID}/campaigns", s.listCampaigns)
 	s.mux.HandleFunc("GET /campaigns/{campaignID}", s.getCampaign)
+	s.mux.HandleFunc("GET /campaigns/{campaignID}/live", s.live)
 	s.mux.HandleFunc("POST /campaigns/{campaignID}/close", s.closeCampaign)
 	s.mux.HandleFunc("POST /campaigns/{campaignID}/updates", s.postUpdate)
+	s.mux.HandleFunc("POST /campaigns/{campaignID}/challenges", s.addChallenge)
 	s.mux.HandleFunc("POST /campaigns/{campaignID}/donations", s.donate)
 	s.mux.HandleFunc("GET /campaigns/{campaignID}/donations", s.listDonations)
 	s.mux.HandleFunc("GET /campaigns/{campaignID}/leaderboard", s.leaderboard)
@@ -109,10 +111,11 @@ func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 type campaignView struct {
 	lumni.Campaign
 	PercentFunded float64 `json:"percent_funded"`
+	Open          bool    `json:"open"`
 }
 
 func viewCampaign(c lumni.Campaign) campaignView {
-	return campaignView{Campaign: c, PercentFunded: c.PercentFunded()}
+	return campaignView{Campaign: c, PercentFunded: c.PercentFunded(), Open: c.Open(time.Now())}
 }
 
 func respond[T any](w http.ResponseWriter, status int, v T, err error) {
@@ -148,21 +151,24 @@ func (s *Server) insights(w http.ResponseWriter, r *http.Request) {
 	respond(w, http.StatusOK, out, err)
 }
 
-// --- alumni ---
+// --- members ---
 
-func (s *Server) createAlumnus(w http.ResponseWriter, r *http.Request) {
-	var in lumni.Alumnus
+func (s *Server) createMember(w http.ResponseWriter, r *http.Request) {
+	var in lumni.Member
 	if !decode(w, r, &in) {
 		return
 	}
 	in.SchoolID = r.PathValue("schoolID")
-	out, err := s.store.CreateAlumnus(in)
+	out, err := s.store.CreateMember(in)
 	respond(w, http.StatusCreated, out, err)
 }
 
-func (s *Server) listAlumni(w http.ResponseWriter, r *http.Request) {
+func (s *Server) listMembers(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	f := lumni.AlumniFilter{Query: q.Get("q"), Industry: q.Get("industry"), Location: q.Get("location")}
+	f := lumni.MemberFilter{
+		Query: q.Get("q"), Kind: lumni.MemberKind(q.Get("kind")),
+		Industry: q.Get("industry"), Location: q.Get("location"), Grade: q.Get("grade"),
+	}
 	if gy := q.Get("grad_year"); gy != "" {
 		n, err := strconv.Atoi(gy)
 		if err != nil {
@@ -171,21 +177,21 @@ func (s *Server) listAlumni(w http.ResponseWriter, r *http.Request) {
 		}
 		f.GradYear = n
 	}
-	out, err := s.store.ListAlumni(r.PathValue("schoolID"), f)
+	out, err := s.store.ListMembers(r.PathValue("schoolID"), f)
 	respond(w, http.StatusOK, out, err)
 }
 
-func (s *Server) getAlumnus(w http.ResponseWriter, r *http.Request) {
-	out, err := s.store.GetAlumnus(r.PathValue("schoolID"), r.PathValue("alumnusID"))
+func (s *Server) getMember(w http.ResponseWriter, r *http.Request) {
+	out, err := s.store.GetMember(r.PathValue("schoolID"), r.PathValue("memberID"))
 	respond(w, http.StatusOK, out, err)
 }
 
-func (s *Server) updateAlumnus(w http.ResponseWriter, r *http.Request) {
-	var p lumni.AlumnusPatch
+func (s *Server) updateMember(w http.ResponseWriter, r *http.Request) {
+	var p lumni.MemberPatch
 	if !decode(w, r, &p) {
 		return
 	}
-	out, err := s.store.UpdateAlumnus(r.PathValue("schoolID"), r.PathValue("alumnusID"), p)
+	out, err := s.store.UpdateMember(r.PathValue("schoolID"), r.PathValue("memberID"), p)
 	respond(w, http.StatusOK, out, err)
 }
 
@@ -215,6 +221,34 @@ func (s *Server) getCampaign(w http.ResponseWriter, r *http.Request) {
 	respond(w, http.StatusOK, viewCampaign(out), err)
 }
 
+// liveView is the small payload a campaign page polls to update its numbers.
+type liveView struct {
+	RaisedCents   int64             `json:"raised_cents"`
+	GoalCents     int64             `json:"goal_cents"`
+	PercentFunded float64           `json:"percent_funded"`
+	DonorCount    int               `json:"donor_count"`
+	Open          bool              `json:"open"`
+	Challenges    []lumni.Challenge `json:"challenges"`
+	ByClass       []lumni.Standing  `json:"by_class"`
+	ByGrade       []lumni.Standing  `json:"by_grade"`
+}
+
+func (s *Server) live(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("campaignID")
+	c, err := s.store.GetCampaign(id)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	byClass, _ := s.store.Leaderboard(id, lumni.ByClass)
+	byGrade, _ := s.store.Leaderboard(id, lumni.ByGrade)
+	writeJSON(w, http.StatusOK, liveView{
+		RaisedCents: c.RaisedCents, GoalCents: c.GoalCents, PercentFunded: c.PercentFunded(),
+		DonorCount: c.DonorCount, Open: c.Open(time.Now()), Challenges: c.Challenges,
+		ByClass: byClass, ByGrade: byGrade,
+	})
+}
+
 func (s *Server) closeCampaign(w http.ResponseWriter, r *http.Request) {
 	out, err := s.store.CloseCampaign(r.PathValue("campaignID"))
 	respond(w, http.StatusOK, viewCampaign(out), err)
@@ -228,6 +262,15 @@ func (s *Server) postUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out, err := s.store.PostUpdate(r.PathValue("campaignID"), in.Body)
+	respond(w, http.StatusCreated, viewCampaign(out), err)
+}
+
+func (s *Server) addChallenge(w http.ResponseWriter, r *http.Request) {
+	var in lumni.Challenge
+	if !decode(w, r, &in) {
+		return
+	}
+	out, err := s.store.AddChallenge(r.PathValue("campaignID"), in)
 	respond(w, http.StatusCreated, viewCampaign(out), err)
 }
 
@@ -246,6 +289,14 @@ func (s *Server) listDonations(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) leaderboard(w http.ResponseWriter, r *http.Request) {
-	out, err := s.store.Leaderboard(r.PathValue("campaignID"))
+	by := r.URL.Query().Get("by")
+	if by == "" {
+		by = lumni.ByClass
+	}
+	if by != lumni.ByClass && by != lumni.ByGrade {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "by must be class or grade"})
+		return
+	}
+	out, err := s.store.Leaderboard(r.PathValue("campaignID"), by)
 	respond(w, http.StatusOK, out, err)
 }

@@ -1,89 +1,87 @@
 # Lumni
 
-Lumni gives a school one place to see **all of its alumni and what they're doing now**, and to turn that network into **modern, school-branded fundraising**. Think GoFundMe, built for institutional advancement.
+Lumni gives a school one place to see **its whole community, and what everyone is doing now**, and turns that network into **modern, school-branded giving**, from a $100 gift to a seven-figure one.
 
-This repo is the first concept: a Go server (standard library only, in-memory store) with a server-rendered web UI and a JSON API under `/api`.
+Built for independent schools like the LA-area PreK–12s, where current parents give most and alumni are young, and for universities, where alumni are the whole game.
+
+This repo is the concept build: a Go server (standard library only, in-memory store) with a server-rendered web UI and a JSON API under `/api`.
 
 ## What it does
 
-**Alumni directory**
-- Profiles: grad year, degree, employer, title, industry, location, bio
-- Search and filter by text (`q`), `industry`, `location` and `grad_year`
-- Insights for the school: headcount by industry, location and class year, top employers, and giving participation rate
+**The community, in one place**
+- People of every kind: alumni, current parents, alumni parents, grandparents, faculty, friends. Alumni carry a class year; parents carry their child's grade.
+- What each person does now: title, employer, industry, location, bio.
+- Search and filter by text, kind, industry, location, class year or grade. Export any view to CSV.
+- **Profile links**: every person has a private `/me/…` link the school can text or email so they update their own details in thirty seconds.
 
-**Fundraising campaigns**
-- Campaigns with a story, a goal, an optional deadline, and a live `percent_funded`
-- **Matching gifts**: a sponsor (for example, "Class of 1990") matches gifts 1:1 up to a cap
-- **Donor wall** that respects anonymous gifts
-- **Class leaderboard** that ranks graduating classes by giving
-- **Campaign updates** so donors can see progress
-- Donations can be linked to an alumnus profile, which drives participation stats
+**Giving that fits how schools actually raise money**
+- **Share-a-link giving** (`/give/…`): one screen, name, email, any amount. If the email matches someone in the directory, the gift is linked to them automatically, so the school knows which alumni and parents gave with no logins.
+- **Major gifts** ($10K+) are flagged on the dashboard for personal follow-up by the Head of School.
+- **Campaigns** with a story, goal, optional deadline, and live progress.
+- **Giving Days**: a timed campaign with **challenges** ("first 5 gifts unlock $25K from the Whitfields", "10 alumni gifts unlock $50K", "Grade 7 reaching $20K unlocks $20K"), **sponsor matching**, and live-updating totals.
+- **Participation by grade and by class**, the metric independent schools care most about.
+- A **donor wall** that respects anonymity, campaign **updates**, and a full **gifts ledger** with CSV export.
+
+**Business model**: no subscription. Lumni takes 4% of each gift (`lumni.PlatformFeeBps`); the dashboard shows what that adds up to.
 
 ## Run it
 
 ```sh
-go run ./cmd/lumni -seed          # listens on :8080 with demo data (or set LUMNI_ADDR)
+go run ./cmd/lumni -seed          # :8080 with demo data (or set LUMNI_ADDR)
 go test -race ./...
 ```
 
-Then open http://localhost:8080.
+Then open http://localhost:8080. The demo school ("Canyon Ridge") is fictional but shaped like a real LA independent school: first senior class in 2009, a $1M/24-hour giving day that's live right now, and a $24M arts-center campaign.
 
-## Web UI
+## Pages
 
-| Page | What it shows |
-|---|---|
-| `/` | Schools on the platform; add a school |
-| `/s/{school}` | **School dashboard**: alumni count, total raised, participation rate, breakdowns by industry / location / employer, campaign list, launch-a-campaign form |
-| `/s/{school}/alumni` | **Alumni directory** with search and filters; add-an-alum form |
-| `/c/{campaign}` | **Public campaign page**: story, progress bar, matching-gift banner, donor wall, class leaderboard, updates, and a Give form |
+| Page | For | What it shows |
+|---|---|---|
+| `/s/{school}` | school | Dashboard: community size, raised, parent & alumni participation, major gifts to follow up, campaigns with their share links, launch form, who gives by kind, recent gifts |
+| `/s/{school}/people` | school | The directory, with filters, CSV export, and add form |
+| `/s/{school}/gifts` | school | Every gift, unredacted, with CSV export |
+| `/c/{campaign}` | everyone | Campaign page: progress, match, challenges, donor wall, participation, updates, admin panel |
+| `/give/{campaign}` | donors | The one-screen give page. Supports `?amount=` and `?email=` presets for links sent to specific people |
+| `/me/{member}` | one person | Update your own profile |
 
-Pages are plain `html/template` with a single stylesheet (light and dark), no JavaScript framework.
+Server-rendered `html/template`, one stylesheet (dark, monochrome, one accent), a few lines of JS for live totals.
 
 ## API
 
-All API routes are prefixed with `/api`.
+All routes are prefixed with `/api`. Money is integer cents.
 
 | Method | Path | Description |
 |---|---|---|
 | GET | `/healthz` | Health check |
 | POST / GET | `/schools` | Create or list schools |
 | GET | `/schools/{id}` | Get a school |
-| GET | `/schools/{id}/insights` | Alumni and giving analytics |
-| POST / GET | `/schools/{id}/alumni` | Add an alumnus, or search the directory (`?q=&industry=&location=&grad_year=`) |
-| GET / PATCH | `/schools/{id}/alumni/{alumnusID}` | View or update a profile |
-| POST / GET | `/schools/{id}/campaigns` | Create or list campaigns |
+| GET | `/schools/{id}/insights` | Community and giving analytics |
+| POST / GET | `/schools/{id}/members` | Add a person, or search (`?q=&kind=&industry=&location=&grad_year=&grade=`) |
+| GET / PATCH | `/schools/{id}/members/{memberID}` | View or update a profile |
+| POST / GET | `/schools/{id}/campaigns` | Create or list campaigns (`kind`: `campaign` or `giving_day`; giving days need `starts_at` and `deadline`) |
 | GET | `/campaigns/{id}` | Campaign with progress |
-| POST | `/campaigns/{id}/donations` | Donate (`amount_cents`, plus `alumnus_id` or `donor_name`, `message`, `anonymous`) |
+| GET | `/campaigns/{id}/live` | Small payload the page polls: totals, challenges, participation |
+| POST | `/campaigns/{id}/donations` | Give (`amount_cents`, plus `member_id`, `donor_email` or `donor_name`; `message`, `anonymous`) |
 | GET | `/campaigns/{id}/donations` | Donor wall, newest first |
-| GET | `/campaigns/{id}/leaderboard` | Giving ranked by class year |
-| POST | `/campaigns/{id}/updates` | Post a progress update (`body`) |
-| POST | `/campaigns/{id}/close` | Stop accepting donations |
-
-All money values are integer cents.
-
-Example:
-
-```sh
-curl -X POST localhost:8080/api/schools -d '{"name":"Westbrook University"}'
-curl -X POST localhost:8080/api/schools/$SCHOOL/campaigns \
-  -d '{"title":"New Science Library","goal_cents":5000000,"match":{"sponsor":"Class of 1990","cap_cents":1000000}}'
-curl -X POST localhost:8080/api/campaigns/$CAMPAIGN/donations -d '{"alumnus_id":"'$ALUM'","amount_cents":25000}'
-```
+| GET | `/campaigns/{id}/leaderboard?by=class\|grade` | Participation and dollars by class year or grade |
+| POST | `/campaigns/{id}/challenges` | Add a challenge |
+| POST | `/campaigns/{id}/updates` | Post a progress update |
+| POST | `/campaigns/{id}/close` | Stop accepting gifts |
 
 ## Layout
 
 ```
 cmd/lumni/        server entrypoint and demo seed data
 internal/lumni/   domain types and validation
-internal/store/   in-memory store (matching, leaderboard, insights)
-internal/api/     JSON API handlers (Go 1.22+ method routing)
+internal/store/   in-memory store (matching, challenges, leaderboards, insights)
+internal/api/     JSON API handlers
 internal/web/     HTML pages, templates and stylesheet
 ```
 
 ## Next steps
 
-- Persistent storage (Postgres) behind the store interface
-- Authentication and roles (school admin vs. alumnus)
-- Real payments (Stripe) instead of recorded pledges
-- CSV import of existing alumni records
-- Logins so the admin actions (launch, update, close) are limited to school staff
+- Real payments (Stripe) with receipts, so a pilot can take real money
+- Logins and roles, so school-only pages and admin actions are protected
+- Persistent storage (Postgres) behind the store
+- CSV import from Blackbaud / Veracross exports
+- Email and SMS sends of give links and profile links from inside the app

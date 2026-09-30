@@ -1,28 +1,45 @@
 {{define "content"}}
-<nav class="crumbs"><a href="/">Schools</a> › <a href="/s/{{.School.ID}}">{{.School.Name}}</a> › Campaign</nav>
+<nav class="crumbs"><a href="/">Schools</a> / <a href="/s/{{.School.ID}}">{{.School.Name}}</a> / Campaign</nav>
 
-<section class="campaign-hero">
-  <p class="eyebrow">{{.School.Name}}</p>
+<section class="campaign-hero" data-live="/api/campaigns/{{.Campaign.ID}}/live">
+  <p class="eyebrow">{{.School.Name}}{{if .Campaign.IsGivingDay}} · Giving Day{{end}}</p>
   <h1>{{.Campaign.Title}}</h1>
-  {{if .Campaign.Story}}<p class="story">{{.Campaign.Story}}</p>{{end}}
+  {{if .Campaign.Story}}<p class="lede">{{.Campaign.Story}}</p>{{end}}
 
   <div class="progress">
-    <div class="bar big"><div style="width:{{pct .Campaign.PercentFunded}}%"></div></div>
+    <div class="bar big"><div id="live-bar" style="width:{{pct .Campaign.PercentFunded}}%"></div></div>
     <div class="row">
-      <span><strong>{{money .Campaign.RaisedCents}}</strong> raised of {{money .Campaign.GoalCents}}</span>
-      <span>{{pct1 .Campaign.PercentFunded}}% · {{.Campaign.DonorCount}} donors{{if not .Campaign.Deadline.IsZero}} · ends {{date .Campaign.Deadline}}{{end}}</span>
+      <span><strong id="live-raised">{{money .Campaign.RaisedCents}}</strong> <span class="muted">of {{money .Campaign.GoalCents}}</span></span>
+      <span class="muted"><span id="live-pct">{{pct1 .Campaign.PercentFunded}}</span>% · <span id="live-donors">{{.Campaign.DonorCount}}</span> gifts{{if not .Campaign.Deadline.IsZero}} · {{if .Open}}ends{{else if .Started}}ended{{else}}opens {{dt .Campaign.StartsAt}}, ends{{end}} {{dt .Campaign.Deadline}}{{end}}</span>
     </div>
+  </div>
+
+  <div class="cta">
+    {{if .Open}}<a class="btn primary" href="/give/{{.Campaign.ID}}">Give now</a>{{else if not .Started}}<span class="pill">Opens {{dt .Campaign.StartsAt}}</span>{{else}}<span class="pill">Giving closed</span>{{end}}
+    <span class="share small"><span class="muted">Share:</span> <code>{{.Base}}/give/{{.Campaign.ID}}</code></span>
   </div>
 
   {{with .Campaign.Match}}
   <div class="banner match">
-    <strong>{{.Sponsor}}</strong> is matching every gift dollar for dollar, up to {{money .CapCents}}.
+    <strong>{{.Sponsor}}</strong> matches every gift dollar for dollar, up to {{money .CapCents}}.
     {{$left := sub .CapCents .UsedCents}}
-    {{if gt $left 0}}<span class="muted">{{money $left}} in matching funds still available.</span>{{else}}<span class="muted">Match fully unlocked!</span>{{end}}
+    {{if gt $left 0}}<span class="muted">{{money $left}} still available.</span>{{else}}<span class="muted">Match fully unlocked.</span>{{end}}
   </div>
   {{end}}
-  {{if not .Open}}<div class="banner closed">This campaign is no longer accepting gifts. Thank you to everyone who gave.</div>{{end}}
 </section>
+
+{{if .Campaign.Challenges}}
+<section class="challenges">
+  {{range .Campaign.Challenges}}
+  <div class="card challenge {{if .Unlocked}}done{{end}}" data-challenge="{{.ID}}">
+    <div class="row"><span class="l">{{.Name}}</span>{{if .Unlocked}}<span class="pill open">unlocked</span>{{end}}</div>
+    <p class="small">{{if .Sponsor}}<strong>{{.Sponsor}}</strong> gives{{else}}Unlocks{{end}} <strong>{{money .RewardCents}}</strong> when {{.Segment.Label}} reach {{threshold .}}.</p>
+    <div class="bar"><div style="width:{{pct .Percent}}%"></div></div>
+    <div class="muted small"><span class="c-progress">{{progress .}}</span> of {{threshold .}}</div>
+  </div>
+  {{end}}
+</section>
+{{end}}
 
 <section class="grid two wide-left">
   <div class="stack">
@@ -34,7 +51,7 @@
         <li>
           <span class="avatar">{{initial .DonorName}}</span>
           <div>
-            <div class="row"><span class="strong">{{.DonorName}}</span><span>{{money .AmountCents}}{{if .MatchedCents}} <span class="muted small">+{{money .MatchedCents}} match</span>{{end}}</span></div>
+            <div class="row"><span><span class="strong">{{.DonorName}}</span>{{if .DonorKind}} <span class="muted small">{{.DonorKind}}</span>{{end}}</span><span>{{money .AmountCents}}{{if .MatchedCents}} <span class="muted small">+{{money .MatchedCents}} match</span>{{end}}</span></div>
             {{if .Message}}<p class="muted">“{{.Message}}”</p>{{end}}
           </div>
         </li>
@@ -43,60 +60,85 @@
       {{else}}<p class="muted">Be the first to give.</p>{{end}}
     </div>
 
+    {{if or .ByClass .ByGrade}}
     <div class="card">
-      <h2>Class leaderboard</h2>
-      {{if .Leaderboard}}
-      <table>
-        <thead><tr><th>#</th><th>Class</th><th class="num">Raised</th><th class="num">Donors</th></tr></thead>
-        <tbody>{{range $i, $r := .Leaderboard}}<tr><td>{{inc $i}}</td><td class="strong">Class of {{$r.GradYear}}</td><td class="num">{{money $r.RaisedCents}}</td><td class="num">{{$r.Donors}}</td></tr>{{end}}</tbody>
-      </table>
-      {{else}}<p class="muted">Gifts from alumni will rank their graduating class here.</p>{{end}}
+      <h2>Participation</h2>
+      <div class="grid two">
+        {{if .ByGrade}}<div>
+          <h3>Parents by grade</h3>
+          <table><thead><tr><th>Grade</th><th class="num">Part.</th><th class="num">Raised</th></tr></thead>
+          <tbody>{{range .ByGrade}}<tr><td>{{.Label}}</td><td class="num">{{pct0 .Participation}}%</td><td class="num muted">{{money .RaisedCents}}</td></tr>{{end}}</tbody></table>
+        </div>{{end}}
+        {{if .ByClass}}<div>
+          <h3>Alumni by class</h3>
+          <table><thead><tr><th>Class</th><th class="num">Part.</th><th class="num">Raised</th></tr></thead>
+          <tbody>{{range .ByClass}}<tr><td>{{.Label}}</td><td class="num">{{pct0 .Participation}}%</td><td class="num muted">{{money .RaisedCents}}</td></tr>{{end}}</tbody></table>
+        </div>{{end}}
+      </div>
     </div>
+    {{end}}
+  </div>
 
+  <div class="stack">
     <div class="card">
       <h2>Updates</h2>
       {{if .Campaign.Updates}}
-      <ul class="updates">{{range .Campaign.Updates}}<li><span class="muted small">{{date .CreatedAt}}</span><p>{{.Body}}</p></li>{{end}}</ul>
+      <ul class="updates">{{range .Campaign.Updates}}<li><span class="muted small">{{dt .CreatedAt}}</span><p>{{.Body}}</p></li>{{end}}</ul>
       {{else}}<p class="muted">No updates yet.</p>{{end}}
-      <details class="admin">
-        <summary>School admin: post an update</summary>
-        <form method="post" action="/c/{{.Campaign.ID}}/updates" class="stack">
-          <textarea name="body" rows="3" required placeholder="We just passed 50%…"></textarea>
-          <button class="quiet">Post update</button>
-        </form>
-        {{if .Open}}<form method="post" action="/c/{{.Campaign.ID}}/close"><button class="quiet danger">Close campaign</button></form>{{end}}
-      </details>
     </div>
-  </div>
 
-  <div class="card give">
-    <h2>Give</h2>
-    {{if .Open}}
-    <form method="post" action="/c/{{.Campaign.ID}}/give" class="stack">
-      <div class="amounts">
-        {{range $a := amounts}}<button type="button" class="quiet" data-amount="{{$a}}">${{$a}}</button>{{end}}
-      </div>
-      <label>Amount ($) <input name="amount" id="amount" type="number" min="1" step="1" required placeholder="250"></label>
-      {{if .Alumni}}
-      <label>I'm an alum
-        <select name="alumnus_id">
-          <option value="">— not listed / friend of the school —</option>
-          {{range .Alumni}}<option value="{{.ID}}">{{.Name}} ’{{printf "%02d" (mod .GradYear 100)}}</option>{{end}}
-        </select>
-      </label>
-      {{end}}
-      <label>Your name <input name="donor_name" placeholder="Leave blank to use your alumni profile"></label>
-      <label>Message <textarea name="message" rows="2" placeholder="Go Trailblazers!"></textarea></label>
-      <label class="check"><input type="checkbox" name="anonymous" value="1"> Give anonymously</label>
-      <button class="primary">Give now</button>
-      <p class="muted small">Concept build: gifts are recorded but no payment is taken.</p>
-    </form>
-    <script>
-      document.querySelectorAll('[data-amount]').forEach(b => b.addEventListener('click', () => {
-        document.getElementById('amount').value = b.dataset.amount;
-      }));
-    </script>
-    {{else}}<p class="muted">Giving is closed for this campaign.</p>{{end}}
+    <details class="card admin">
+      <summary>School admin</summary>
+      <form method="post" action="/c/{{.Campaign.ID}}/updates" class="stack">
+        <label>Post an update <textarea name="body" rows="2" required placeholder="We just passed 50%…"></textarea></label>
+        <button class="quiet">Post</button>
+      </form>
+      <form method="post" action="/c/{{.Campaign.ID}}/challenges" class="stack">
+        <h3>Add a challenge</h3>
+        <label>Name <input name="name" required placeholder="Early Bird"></label>
+        <label>Sponsor <input name="sponsor" placeholder="The Board of Trustees"></label>
+        <div class="cols">
+          <label>Who counts
+            <select name="segment">
+              <option value="">Everyone</option><option value="alumni">Alumni</option><option value="parents">Current parents</option>
+              {{range grades}}<option value="grade:{{.}}">Grade {{.}} parents</option>{{end}}
+            </select>
+          </label>
+          <label>Metric <select name="metric"><option value="donors">Number of gifts</option><option value="dollars">Dollars given</option></select></label>
+        </div>
+        <div class="cols">
+          <label>Threshold <input name="threshold" required placeholder="100"></label>
+          <label>Sponsor gives ($) <input name="reward" required placeholder="10,000"></label>
+        </div>
+        <button class="quiet">Add challenge</button>
+      </form>
+      {{if .Open}}<form method="post" action="/c/{{.Campaign.ID}}/close"><button class="quiet danger">Close campaign</button></form>{{end}}
+    </details>
   </div>
 </section>
+
+<script>
+(function () {
+  var hero = document.querySelector('[data-live]');
+  if (!hero) return;
+  var fmt = function (cents) { return '$' + Math.round(cents / 100).toLocaleString('en-US'); };
+  function tick() {
+    fetch(hero.dataset.live).then(function (r) { return r.json(); }).then(function (d) {
+      document.getElementById('live-raised').textContent = fmt(d.raised_cents);
+      document.getElementById('live-pct').textContent = d.percent_funded.toFixed(1);
+      document.getElementById('live-donors').textContent = d.donor_count;
+      document.getElementById('live-bar').style.width = Math.min(100, d.percent_funded) + '%';
+      (d.challenges || []).forEach(function (c) {
+        var el = document.querySelector('[data-challenge="' + c.id + '"]');
+        if (!el) return;
+        var p = c.threshold ? Math.min(100, c.progress / c.threshold * 100) : 0;
+        el.querySelector('.bar > div').style.width = p + '%';
+        el.querySelector('.c-progress').textContent = c.metric === 'dollars' ? fmt(c.progress) : c.progress;
+        if (c.unlocked_at && !el.classList.contains('done')) location.reload();
+      });
+    }).catch(function () {});
+  }
+  setInterval(tick, 10000);
+})();
+</script>
 {{end}}

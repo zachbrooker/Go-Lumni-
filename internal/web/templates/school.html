@@ -1,25 +1,95 @@
 {{define "content"}}
-<nav class="crumbs"><a href="/">Schools</a> › {{.School.Name}}</nav>
-<h1>{{.School.Name}}</h1>
-<p class="subnav"><a href="/s/{{.School.ID}}/alumni">Alumni directory →</a></p>
+<nav class="crumbs"><a href="/">Schools</a> / {{.School.Name}}</nav>
+<div class="pagehead">
+  <h1>{{.School.Name}}</h1>
+  <nav class="subnav">
+    <a href="/s/{{.School.ID}}/people">People</a>
+    <a href="/s/{{.School.ID}}/gifts">Gifts</a>
+    <a href="/s/{{.School.ID}}/people.csv">Export people</a>
+    <a href="/s/{{.School.ID}}/gifts.csv">Export gifts</a>
+  </nav>
+</div>
 
 {{with .Insights}}
 <section class="tiles">
-  <div class="tile"><span class="n">{{.TotalAlumni}}</span><span class="l">alumni on record</span></div>
-  <div class="tile"><span class="n">{{money .TotalRaisedCents}}</span><span class="l">raised all time</span></div>
-  <div class="tile"><span class="n">{{pct1 .ParticipationRate}}%</span><span class="l">alumni participation</span></div>
-  <div class="tile"><span class="n">{{.ActiveCampaigns}}</span><span class="l">active campaigns</span></div>
+  <div class="tile"><span class="l">Community</span><span class="n">{{.TotalMembers}}</span><span class="s">{{kindCount .ByKind "alumnus"}} alumni · {{kindCount .ByKind "parent"}} parents</span></div>
+  <div class="tile"><span class="l">Raised all time</span><span class="n">{{money .TotalRaisedCents}}</span><span class="s">{{.Donors}} community donors</span></div>
+  <div class="tile"><span class="l">Parent participation</span><span class="n">{{pct0 .ParentParticipation}}%</span><span class="s">of current parents have given</span></div>
+  <div class="tile"><span class="l">Alumni participation</span><span class="n">{{pct0 .AlumniParticipation}}%</span><span class="s">of alumni have given</span></div>
+</section>
+{{end}}
+
+{{if .Major}}
+<section class="card accent">
+  <div class="row"><h2>Major gifts to follow up</h2><span class="pill">{{len .Major}}</span></div>
+  <p class="muted small">Gifts of {{money 1000000}} or more. Each deserves a personal thank-you from the Head of School.</p>
+  <table>
+    <thead><tr><th>Donor</th><th>Kind</th><th class="num">Amount</th><th>When</th></tr></thead>
+    <tbody>{{range .Major}}<tr><td class="strong">{{.DonorName}}{{if .Anonymous}} <span class="muted small">(anonymous publicly)</span>{{end}}<br><span class="muted small">{{.DonorEmail}}</span></td><td>{{.DonorKind}}</td><td class="num strong">{{money .AmountCents}}</td><td class="muted">{{dt .CreatedAt}}</td></tr>{{end}}</tbody>
+  </table>
+</section>
+{{end}}
+
+<section class="grid two">
+  <div class="card">
+    <h2>Campaigns</h2>
+    {{if .Campaigns}}
+    <ul class="campaigns">
+      {{$now := .Now}}{{$base := .Base}}
+      {{range .Campaigns}}
+      <li>
+        <div class="row">
+          <a class="strong" href="/c/{{.ID}}">{{.Title}}</a>
+          <span class="pill {{if .Open $now}}open{{end}}">{{if .IsGivingDay}}giving day · {{end}}{{if .Open $now}}live{{else if not (.Started $now)}}scheduled{{else}}closed{{end}}</span>
+        </div>
+        <div class="bar"><div style="width:{{pct .PercentFunded}}%"></div></div>
+        <div class="row muted small"><span>{{money .RaisedCents}} of {{money .GoalCents}}</span><span>{{.DonorCount}} gifts</span></div>
+        <div class="share small"><span class="muted">Give link</span> <code>{{$base}}/give/{{.ID}}</code></div>
+      </li>
+      {{end}}
+    </ul>
+    {{else}}<p class="muted">No campaigns yet. Launch one on the right.</p>{{end}}
+  </div>
+
+  <div class="card">
+    <h2>Launch</h2>
+    <form method="post" action="/s/{{.School.ID}}/campaigns" class="stack">
+      <div class="cols">
+        <label>Type
+          <select name="kind">
+            <option value="campaign">Campaign (open-ended)</option>
+            <option value="giving_day">Giving Day (timed, with challenges)</option>
+          </select>
+        </label>
+        <label>Goal ($) <input name="goal" type="text" inputmode="numeric" required placeholder="3,500,000"></label>
+      </div>
+      <label>Title <input name="title" required placeholder="Trailblazer Fund 2026"></label>
+      <label>Story <textarea name="story" rows="3" placeholder="What the money does, in two sentences."></textarea></label>
+      <div class="cols">
+        <label>Starts <input name="starts_at" type="datetime-local"></label>
+        <label>Ends <input name="deadline" type="datetime-local"></label>
+      </div>
+      <fieldset>
+        <legend>Matching gift (optional)</legend>
+        <div class="cols">
+          <label>Sponsor <input name="match_sponsor" placeholder="The Board of Trustees"></label>
+          <label>Match up to ($) <input name="match_cap" type="text" inputmode="numeric" placeholder="250,000"></label>
+        </div>
+      </fieldset>
+      <button>Launch</button>
+    </form>
+  </div>
 </section>
 
+{{with .Insights}}
 <section class="grid three">
   <div class="card">
-    <h3>By industry</h3>
-    {{if .ByIndustry}}<table>{{range $k, $v := .ByIndustry}}<tr><td>{{$k}}</td><td class="num">{{$v}}</td></tr>{{end}}</table>
-    {{else}}<p class="muted">No data yet.</p>{{end}}
+    <h3>Who gives</h3>
+    <table>{{range kinds}}<tr><td>{{.Label}}</td><td class="num muted">{{kindCount $.Insights.ByKind .}}</td><td class="num">{{money (kindCents $.Insights.RaisedByKindCents .)}}</td></tr>{{end}}</table>
   </div>
   <div class="card">
-    <h3>By location</h3>
-    {{if .ByLocation}}<table>{{range $k, $v := .ByLocation}}<tr><td>{{$k}}</td><td class="num">{{$v}}</td></tr>{{end}}</table>
+    <h3>Alumni by industry</h3>
+    {{if .ByIndustry}}<table>{{range $k, $v := .ByIndustry}}<tr><td>{{$k}}</td><td class="num">{{$v}}</td></tr>{{end}}</table>
     {{else}}<p class="muted">No data yet.</p>{{end}}
   </div>
   <div class="card">
@@ -30,44 +100,13 @@
 </section>
 {{end}}
 
-<section class="grid two">
-  <div class="card">
-    <h2>Campaigns</h2>
-    {{if .Campaigns}}
-    <ul class="campaigns">
-      {{$today := .Today}}
-      {{range .Campaigns}}
-      <li>
-        <div class="row">
-          <a class="strong" href="/c/{{.ID}}">{{.Title}}</a>
-          <span class="pill {{if .Open $today}}open{{else}}closed{{end}}">{{if .Open $today}}active{{else}}closed{{end}}</span>
-        </div>
-        <div class="bar"><div style="width:{{pct .PercentFunded}}%"></div></div>
-        <div class="row muted small"><span>{{money .RaisedCents}} of {{money .GoalCents}}</span><span>{{.DonorCount}} donors</span></div>
-      </li>
-      {{end}}
-    </ul>
-    {{else}}<p class="muted">No campaigns yet.</p>{{end}}
-  </div>
-
-  <div class="card">
-    <h2>Launch a campaign</h2>
-    <form method="post" action="/s/{{.School.ID}}/campaigns" class="stack">
-      <label>Title <input name="title" required placeholder="New Science Library"></label>
-      <label>Story <textarea name="story" rows="3" placeholder="Why this matters, and what the money builds."></textarea></label>
-      <div class="cols">
-        <label>Goal ($) <input name="goal" type="number" min="1" step="1" required placeholder="50000"></label>
-        <label>Deadline <input name="deadline" type="date"></label>
-      </div>
-      <fieldset>
-        <legend>Matching gift (optional)</legend>
-        <div class="cols">
-          <label>Sponsor <input name="match_sponsor" placeholder="Class of 1990"></label>
-          <label>Match up to ($) <input name="match_cap" type="number" min="1" step="1" placeholder="10000"></label>
-        </div>
-      </fieldset>
-      <button>Launch</button>
-    </form>
-  </div>
+<section class="card">
+  <div class="row"><h2>Recent gifts</h2><a class="small" href="/s/{{.School.ID}}/gifts">All gifts →</a></div>
+  {{if .Recent}}
+  <table>
+    <thead><tr><th>Donor</th><th>Kind</th><th class="num">Amount</th><th>When</th></tr></thead>
+    <tbody>{{range .Recent}}<tr><td class="strong">{{.DonorName}}</td><td class="muted">{{.DonorKind}}</td><td class="num">{{money .AmountCents}}{{if .Major}} <span class="pill accent">major</span>{{end}}</td><td class="muted">{{dt .CreatedAt}}</td></tr>{{end}}</tbody>
+  </table>
+  {{else}}<p class="muted">No gifts yet.</p>{{end}}
 </section>
 {{end}}
