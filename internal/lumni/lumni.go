@@ -139,7 +139,7 @@ type Campaign struct {
 }
 
 // PercentFunded reports progress toward the goal, capped at display time by the client.
-func (c *Campaign) PercentFunded() float64 {
+func (c Campaign) PercentFunded() float64 {
 	if c.GoalCents == 0 {
 		return 0
 	}
@@ -147,7 +147,7 @@ func (c *Campaign) PercentFunded() float64 {
 }
 
 // Open reports whether the campaign accepts donations at time now.
-func (c *Campaign) Open(now time.Time) bool {
+func (c Campaign) Open(now time.Time) bool {
 	if c.Status != StatusActive {
 		return false
 	}

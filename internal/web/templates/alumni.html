@@ -1,0 +1,49 @@
+{{define "content"}}
+<nav class="crumbs"><a href="/">Schools</a> › <a href="/s/{{.School.ID}}">{{.School.Name}}</a> › Alumni</nav>
+<h1>Alumni directory</h1>
+
+<form method="get" class="filters">
+  <input name="q" value="{{.Filter.Query}}" placeholder="Search name, employer, title…">
+  <input name="industry" value="{{.Filter.Industry}}" placeholder="Industry">
+  <input name="location" value="{{.Filter.Location}}" placeholder="Location">
+  <input name="grad_year" type="number" value="{{if .Filter.GradYear}}{{.Filter.GradYear}}{{end}}" placeholder="Class of">
+  <button>Filter</button>
+  <a class="btn quiet" href="/s/{{.School.ID}}/alumni">Clear</a>
+</form>
+
+<section class="grid two wide-left">
+  <div class="card">
+    {{if .Alumni}}
+    <table class="alumni">
+      <thead><tr><th></th><th>Name</th><th>Class</th><th>Now</th><th>Industry</th><th>Location</th></tr></thead>
+      <tbody>
+      {{range .Alumni}}
+      <tr>
+        <td><span class="avatar">{{initial .Name}}</span></td>
+        <td class="strong">{{.Name}}<br><span class="muted small">{{.Email}}</span></td>
+        <td>{{.GradYear}}</td>
+        <td>{{if .Title}}{{.Title}}{{end}}{{if and .Title .Employer}}, {{end}}{{if .Employer}}{{.Employer}}{{end}}</td>
+        <td>{{.Industry}}</td>
+        <td>{{.Location}}</td>
+      </tr>
+      {{end}}
+      </tbody>
+    </table>
+    {{else}}<p class="muted">No alumni match.</p>{{end}}
+  </div>
+
+  <div class="card">
+    <h2>Add an alum</h2>
+    <form method="post" action="/s/{{.School.ID}}/alumni" class="stack">
+      <label>Name <input name="name" required></label>
+      <label>Email <input name="email" type="email" required></label>
+      <label>Class of <input name="grad_year" type="number" required placeholder="2018"></label>
+      <label>Job title <input name="title"></label>
+      <label>Employer <input name="employer"></label>
+      <label>Industry <input name="industry"></label>
+      <label>Location <input name="location"></label>
+      <button>Add</button>
+    </form>
+  </div>
+</section>
+{{end}}

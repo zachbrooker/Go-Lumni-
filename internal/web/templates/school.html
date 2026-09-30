@@ -1,0 +1,73 @@
+{{define "content"}}
+<nav class="crumbs"><a href="/">Schools</a> › {{.School.Name}}</nav>
+<h1>{{.School.Name}}</h1>
+<p class="subnav"><a href="/s/{{.School.ID}}/alumni">Alumni directory →</a></p>
+
+{{with .Insights}}
+<section class="tiles">
+  <div class="tile"><span class="n">{{.TotalAlumni}}</span><span class="l">alumni on record</span></div>
+  <div class="tile"><span class="n">{{money .TotalRaisedCents}}</span><span class="l">raised all time</span></div>
+  <div class="tile"><span class="n">{{pct1 .ParticipationRate}}%</span><span class="l">alumni participation</span></div>
+  <div class="tile"><span class="n">{{.ActiveCampaigns}}</span><span class="l">active campaigns</span></div>
+</section>
+
+<section class="grid three">
+  <div class="card">
+    <h3>By industry</h3>
+    {{if .ByIndustry}}<table>{{range $k, $v := .ByIndustry}}<tr><td>{{$k}}</td><td class="num">{{$v}}</td></tr>{{end}}</table>
+    {{else}}<p class="muted">No data yet.</p>{{end}}
+  </div>
+  <div class="card">
+    <h3>By location</h3>
+    {{if .ByLocation}}<table>{{range $k, $v := .ByLocation}}<tr><td>{{$k}}</td><td class="num">{{$v}}</td></tr>{{end}}</table>
+    {{else}}<p class="muted">No data yet.</p>{{end}}
+  </div>
+  <div class="card">
+    <h3>Top employers</h3>
+    {{if .TopEmployers}}<table>{{range .TopEmployers}}<tr><td>{{.Label}}</td><td class="num">{{.Count}}</td></tr>{{end}}</table>
+    {{else}}<p class="muted">No data yet.</p>{{end}}
+  </div>
+</section>
+{{end}}
+
+<section class="grid two">
+  <div class="card">
+    <h2>Campaigns</h2>
+    {{if .Campaigns}}
+    <ul class="campaigns">
+      {{$today := .Today}}
+      {{range .Campaigns}}
+      <li>
+        <div class="row">
+          <a class="strong" href="/c/{{.ID}}">{{.Title}}</a>
+          <span class="pill {{if .Open $today}}open{{else}}closed{{end}}">{{if .Open $today}}active{{else}}closed{{end}}</span>
+        </div>
+        <div class="bar"><div style="width:{{pct .PercentFunded}}%"></div></div>
+        <div class="row muted small"><span>{{money .RaisedCents}} of {{money .GoalCents}}</span><span>{{.DonorCount}} donors</span></div>
+      </li>
+      {{end}}
+    </ul>
+    {{else}}<p class="muted">No campaigns yet.</p>{{end}}
+  </div>
+
+  <div class="card">
+    <h2>Launch a campaign</h2>
+    <form method="post" action="/s/{{.School.ID}}/campaigns" class="stack">
+      <label>Title <input name="title" required placeholder="New Science Library"></label>
+      <label>Story <textarea name="story" rows="3" placeholder="Why this matters, and what the money builds."></textarea></label>
+      <div class="cols">
+        <label>Goal ($) <input name="goal" type="number" min="1" step="1" required placeholder="50000"></label>
+        <label>Deadline <input name="deadline" type="date"></label>
+      </div>
+      <fieldset>
+        <legend>Matching gift (optional)</legend>
+        <div class="cols">
+          <label>Sponsor <input name="match_sponsor" placeholder="Class of 1990"></label>
+          <label>Match up to ($) <input name="match_cap" type="number" min="1" step="1" placeholder="10000"></label>
+        </div>
+      </fieldset>
+      <button>Launch</button>
+    </form>
+  </div>
+</section>
+{{end}}

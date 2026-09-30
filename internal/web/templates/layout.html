@@ -1,0 +1,20 @@
+{{define "layout"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Title}} · Lumni</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="/">Lumni</a>
+  <span class="tag">alumni &amp; giving</span>
+</header>
+<main>
+{{if .Error}}<div class="banner error" role="alert">{{.Error}}</div>{{end}}
+{{template "content" .Data}}
+</main>
+<footer>Lumni concept · <a href="/api/healthz">API</a></footer>
+</body>
+</html>{{end}}

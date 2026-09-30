@@ -15,6 +15,7 @@ import (
 	"github.com/zachbrooker/go-lumni/internal/api"
 	"github.com/zachbrooker/go-lumni/internal/lumni"
 	"github.com/zachbrooker/go-lumni/internal/store"
+	"github.com/zachbrooker/go-lumni/internal/web"
 )
 
 func main() {
@@ -31,9 +32,14 @@ func main() {
 		}
 	}
 
+	// The JSON API lives under /api; the HTML UI owns everything else.
+	root := http.NewServeMux()
+	root.Handle("/api/", http.StripPrefix("/api", api.New(st, log)))
+	root.Handle("/", web.New(st, log))
+
 	srv := &http.Server{
 		Addr:              *addr,
-		Handler:           api.New(st, log),
+		Handler:           root,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

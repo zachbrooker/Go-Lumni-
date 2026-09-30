@@ -1,0 +1,102 @@
+{{define "content"}}
+<nav class="crumbs"><a href="/">Schools</a> › <a href="/s/{{.School.ID}}">{{.School.Name}}</a> › Campaign</nav>
+
+<section class="campaign-hero">
+  <p class="eyebrow">{{.School.Name}}</p>
+  <h1>{{.Campaign.Title}}</h1>
+  {{if .Campaign.Story}}<p class="story">{{.Campaign.Story}}</p>{{end}}
+
+  <div class="progress">
+    <div class="bar big"><div style="width:{{pct .Campaign.PercentFunded}}%"></div></div>
+    <div class="row">
+      <span><strong>{{money .Campaign.RaisedCents}}</strong> raised of {{money .Campaign.GoalCents}}</span>
+      <span>{{pct1 .Campaign.PercentFunded}}% · {{.Campaign.DonorCount}} donors{{if not .Campaign.Deadline.IsZero}} · ends {{date .Campaign.Deadline}}{{end}}</span>
+    </div>
+  </div>
+
+  {{with .Campaign.Match}}
+  <div class="banner match">
+    <strong>{{.Sponsor}}</strong> is matching every gift dollar for dollar, up to {{money .CapCents}}.
+    {{$left := sub .CapCents .UsedCents}}
+    {{if gt $left 0}}<span class="muted">{{money $left}} in matching funds still available.</span>{{else}}<span class="muted">Match fully unlocked!</span>{{end}}
+  </div>
+  {{end}}
+  {{if not .Open}}<div class="banner closed">This campaign is no longer accepting gifts. Thank you to everyone who gave.</div>{{end}}
+</section>
+
+<section class="grid two wide-left">
+  <div class="stack">
+    <div class="card">
+      <h2>Donor wall</h2>
+      {{if .Donations}}
+      <ul class="donors">
+        {{range .Donations}}
+        <li>
+          <span class="avatar">{{initial .DonorName}}</span>
+          <div>
+            <div class="row"><span class="strong">{{.DonorName}}</span><span>{{money .AmountCents}}{{if .MatchedCents}} <span class="muted small">+{{money .MatchedCents}} match</span>{{end}}</span></div>
+            {{if .Message}}<p class="muted">“{{.Message}}”</p>{{end}}
+          </div>
+        </li>
+        {{end}}
+      </ul>
+      {{else}}<p class="muted">Be the first to give.</p>{{end}}
+    </div>
+
+    <div class="card">
+      <h2>Class leaderboard</h2>
+      {{if .Leaderboard}}
+      <table>
+        <thead><tr><th>#</th><th>Class</th><th class="num">Raised</th><th class="num">Donors</th></tr></thead>
+        <tbody>{{range $i, $r := .Leaderboard}}<tr><td>{{inc $i}}</td><td class="strong">Class of {{$r.GradYear}}</td><td class="num">{{money $r.RaisedCents}}</td><td class="num">{{$r.Donors}}</td></tr>{{end}}</tbody>
+      </table>
+      {{else}}<p class="muted">Gifts from alumni will rank their graduating class here.</p>{{end}}
+    </div>
+
+    <div class="card">
+      <h2>Updates</h2>
+      {{if .Campaign.Updates}}
+      <ul class="updates">{{range .Campaign.Updates}}<li><span class="muted small">{{date .CreatedAt}}</span><p>{{.Body}}</p></li>{{end}}</ul>
+      {{else}}<p class="muted">No updates yet.</p>{{end}}
+      <details class="admin">
+        <summary>School admin: post an update</summary>
+        <form method="post" action="/c/{{.Campaign.ID}}/updates" class="stack">
+          <textarea name="body" rows="3" required placeholder="We just passed 50%…"></textarea>
+          <button class="quiet">Post update</button>
+        </form>
+        {{if .Open}}<form method="post" action="/c/{{.Campaign.ID}}/close"><button class="quiet danger">Close campaign</button></form>{{end}}
+      </details>
+    </div>
+  </div>
+
+  <div class="card give">
+    <h2>Give</h2>
+    {{if .Open}}
+    <form method="post" action="/c/{{.Campaign.ID}}/give" class="stack">
+      <div class="amounts">
+        {{range $a := amounts}}<button type="button" class="quiet" data-amount="{{$a}}">${{$a}}</button>{{end}}
+      </div>
+      <label>Amount ($) <input name="amount" id="amount" type="number" min="1" step="1" required placeholder="250"></label>
+      {{if .Alumni}}
+      <label>I'm an alum
+        <select name="alumnus_id">
+          <option value="">— not listed / friend of the school —</option>
+          {{range .Alumni}}<option value="{{.ID}}">{{.Name}} ’{{printf "%02d" (mod .GradYear 100)}}</option>{{end}}
+        </select>
+      </label>
+      {{end}}
+      <label>Your name <input name="donor_name" placeholder="Leave blank to use your alumni profile"></label>
+      <label>Message <textarea name="message" rows="2" placeholder="Go Trailblazers!"></textarea></label>
+      <label class="check"><input type="checkbox" name="anonymous" value="1"> Give anonymously</label>
+      <button class="primary">Give now</button>
+      <p class="muted small">Concept build: gifts are recorded but no payment is taken.</p>
+    </form>
+    <script>
+      document.querySelectorAll('[data-amount]').forEach(b => b.addEventListener('click', () => {
+        document.getElementById('amount').value = b.dataset.amount;
+      }));
+    </script>
+    {{else}}<p class="muted">Giving is closed for this campaign.</p>{{end}}
+  </div>
+</section>
+{{end}}

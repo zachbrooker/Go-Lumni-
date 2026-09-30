@@ -2,7 +2,7 @@
 
 Lumni gives a school one place to see **all of its alumni and what they're doing now**, and to turn that network into **modern, school-branded fundraising**. Think GoFundMe, built for institutional advancement.
 
-This repo is the first concept: a JSON API written in Go, using only the standard library, with an in-memory store.
+This repo is the first concept: a Go server (standard library only, in-memory store) with a server-rendered web UI and a JSON API under `/api`.
 
 ## What it does
 
@@ -26,7 +26,22 @@ go run ./cmd/lumni -seed          # listens on :8080 with demo data (or set LUMN
 go test -race ./...
 ```
 
+Then open http://localhost:8080.
+
+## Web UI
+
+| Page | What it shows |
+|---|---|
+| `/` | Schools on the platform; add a school |
+| `/s/{school}` | **School dashboard**: alumni count, total raised, participation rate, breakdowns by industry / location / employer, campaign list, launch-a-campaign form |
+| `/s/{school}/alumni` | **Alumni directory** with search and filters; add-an-alum form |
+| `/c/{campaign}` | **Public campaign page**: story, progress bar, matching-gift banner, donor wall, class leaderboard, updates, and a Give form |
+
+Pages are plain `html/template` with a single stylesheet (light and dark), no JavaScript framework.
+
 ## API
+
+All API routes are prefixed with `/api`.
 
 | Method | Path | Description |
 |---|---|---|
@@ -49,10 +64,10 @@ All money values are integer cents.
 Example:
 
 ```sh
-curl -X POST localhost:8080/schools -d '{"name":"Westbrook University"}'
-curl -X POST localhost:8080/schools/$SCHOOL/campaigns \
+curl -X POST localhost:8080/api/schools -d '{"name":"Westbrook University"}'
+curl -X POST localhost:8080/api/schools/$SCHOOL/campaigns \
   -d '{"title":"New Science Library","goal_cents":5000000,"match":{"sponsor":"Class of 1990","cap_cents":1000000}}'
-curl -X POST localhost:8080/campaigns/$CAMPAIGN/donations -d '{"alumnus_id":"'$ALUM'","amount_cents":25000}'
+curl -X POST localhost:8080/api/campaigns/$CAMPAIGN/donations -d '{"alumnus_id":"'$ALUM'","amount_cents":25000}'
 ```
 
 ## Layout
@@ -61,7 +76,8 @@ curl -X POST localhost:8080/campaigns/$CAMPAIGN/donations -d '{"alumnus_id":"'$A
 cmd/lumni/        server entrypoint and demo seed data
 internal/lumni/   domain types and validation
 internal/store/   in-memory store (matching, leaderboard, insights)
-internal/api/     HTTP handlers (Go 1.22+ method routing)
+internal/api/     JSON API handlers (Go 1.22+ method routing)
+internal/web/     HTML pages, templates and stylesheet
 ```
 
 ## Next steps
@@ -70,4 +86,4 @@ internal/api/     HTTP handlers (Go 1.22+ method routing)
 - Authentication and roles (school admin vs. alumnus)
 - Real payments (Stripe) instead of recorded pledges
 - CSV import of existing alumni records
-- A web UI for donors and a dashboard for school advancement offices
+- Logins so the admin actions (launch, update, close) are limited to school staff
