@@ -1,0 +1,36 @@
+{{define "content"}}
+<section class="give-page">
+  <p class="eyebrow">{{.School.Name}}</p>
+  <h1>{{.Campaign.Title}}</h1>
+  {{if .Campaign.Story}}<p class="lede">{{.Campaign.Story}}</p>{{end}}
+  <p class="muted small">{{money .Campaign.RaisedCents}} raised of {{money .Campaign.GoalCents}} · <a href="/c/{{.Campaign.ID}}">See the campaign</a></p>
+
+  {{if .Open}}
+  <form method="post" action="/give/{{.Campaign.ID}}" class="card give stack">
+    <label>How would you like to give?
+      <select name="method">{{range methods}}<option value="{{.}}">{{methodLabel .}}</option>{{end}}</select>
+    </label>
+    <p class="muted small">Stock: you deduct full market value and pay no capital-gains tax. Donor-advised fund: we prepare the grant recommendation. IRA: donors 70½+ can give directly, tax-free. A tax receipt is issued for every gift.</p>
+    <div class="amounts">
+      {{range $a := amounts}}<button type="button" class="quiet" data-amount="{{$a}}">${{$a}}</button>{{end}}
+    </div>
+    <label>Amount ($) <input name="amount" id="amount" type="text" inputmode="decimal" required value="{{.Amount}}" placeholder="Any amount"></label>
+    <div class="cols">
+      <label>Your name <input name="donor_name" required></label>
+      <label>Email <input name="donor_email" type="email" required value="{{.Email}}" placeholder="so we can thank you"></label>
+    </div>
+    <label>Message (optional) <input name="message" placeholder="For the class of 2012"></label>
+    <label class="check"><input type="checkbox" name="anonymous" value="1"> Keep my name off the public donor wall</label>
+    <button class="primary">Give</button>
+    <p class="muted small">Concept build: gifts are recorded, no payment is taken. Gifts of {{money 1000000}} or more are flagged for the advancement office to follow up personally. Planning a larger or multi-year gift? Reply to the person who sent you this link.</p>
+  </form>
+  <script>
+    document.querySelectorAll('[data-amount]').forEach(function (b) {
+      b.addEventListener('click', function () { document.getElementById('amount').value = b.dataset.amount; document.getElementById('amount').focus(); });
+    });
+  </script>
+  {{else}}
+  <div class="card"><p class="muted">This campaign isn't accepting gifts right now.</p></div>
+  {{end}}
+</section>
+{{end}}

@@ -1,0 +1,36 @@
+{{define "content"}}
+<nav class="crumbs"><a href="/">Schools</a> / <a href="/s/{{.School.ID}}">{{.School.Name}}</a> / Gifts</nav>
+<div class="pagehead">
+  <h1>Gifts</h1>
+  <nav class="subnav"><a href="/s/{{.School.ID}}/gifts.csv">Export (CSV)</a></nav>
+</div>
+
+<section class="tiles">
+  <div class="tile"><span class="l">Gifts</span><span class="n">{{len .Gifts}}</span></div>
+  <div class="tile"><span class="l">Given</span><span class="n">{{money .Total}}</span></div>
+  <div class="tile"><span class="l">Lumni platform fee (4%)</span><span class="n">{{money .Fees}}</span><span class="s">no subscription, ever</span></div>
+</section>
+
+<section class="card">
+  {{if .Gifts}}
+  <table>
+    <thead><tr><th>When</th><th>Donor</th><th>Kind</th><th>Campaign</th><th>How</th><th class="num">Amount</th><th class="num">Matched</th><th>Message</th></tr></thead>
+    <tbody>
+    {{$c := .Campaigns}}
+    {{range .Gifts}}
+    <tr>
+      <td class="muted small">{{dt .CreatedAt}}</td>
+      <td class="strong">{{.DonorName}}{{if .Anonymous}} <span class="muted small">(anon.)</span>{{end}}<br><span class="muted small">{{.DonorEmail}}</span></td>
+      <td class="muted">{{.DonorKind}}</td>
+      <td>{{index $c .CampaignID}}</td>
+      <td class="small">{{methodLabel .Method}}{{if .Pending}} <span class="pill">pending</span>{{end}}{{if .EmployerMatch}} <span class="pill">match?</span>{{end}}</td>
+      <td class="num">{{money .AmountCents}}{{if .Major}} <span class="pill accent">major</span>{{end}}</td>
+      <td class="num muted">{{if .MatchedCents}}{{money .MatchedCents}}{{end}}</td>
+      <td class="muted small">{{.Message}}</td>
+    </tr>
+    {{end}}
+    </tbody>
+  </table>
+  {{else}}<p class="muted">No gifts yet.</p>{{end}}
+</section>
+{{end}}

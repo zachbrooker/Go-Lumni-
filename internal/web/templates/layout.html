@@ -1,0 +1,23 @@
+{{define "layout"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Title}} · Lumni</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="/">LUMNI</a>
+  <nav class="topnav"><a href="/">Schools</a><a href="/api/healthz">API</a></nav>
+</header>
+<main>
+{{if .Error}}<div class="banner error" role="alert">{{.Error}}</div>{{end}}
+{{if .OK}}<div class="banner ok" role="status">{{.OK}}</div>{{end}}
+{{template "content" .Data}}
+</main>
+<footer>LUMNI · Alumni intelligence and giving for schools · concept build</footer>
+</body>
+</html>{{end}}

@@ -1,0 +1,24 @@
+{{define "content"}}
+<section class="give-page">
+  <p class="eyebrow">{{.School.Name}}</p>
+  <h1>Hi {{.Member.Name}}. What are you up to?</h1>
+  <p class="lede">{{.School.Name}} keeps a directory of its community. Take thirty seconds to tell us what you're doing now.</p>
+
+  <form method="post" action="/me/{{.Member.ID}}" class="card stack">
+    <div class="cols">
+      <label>Name <input name="name" value="{{.Member.Name}}"></label>
+      <label>{{.Member.Kind.Label}}{{if .Member.ClassLabel}} · {{.Member.ClassLabel}}{{end}} <input value="{{.Member.Email}}" disabled></label>
+    </div>
+    <div class="cols">
+      <label>Job title <input name="title" value="{{.Member.Title}}" placeholder="Founder"></label>
+      <label>Employer <input name="employer" value="{{.Member.Employer}}" placeholder="Acme"></label>
+    </div>
+    <div class="cols">
+      <label>Industry <input name="industry" value="{{.Member.Industry}}" placeholder="Entertainment"></label>
+      <label>Where you live <input name="location" value="{{.Member.Location}}" placeholder="Los Angeles"></label>
+    </div>
+    <label>A line about you <textarea name="bio" rows="3">{{.Member.Bio}}</textarea></label>
+    <button class="primary">Save</button>
+  </form>
+</section>
+{{end}}

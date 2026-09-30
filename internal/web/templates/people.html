@@ -1,0 +1,70 @@
+{{define "content"}}
+<nav class="crumbs"><a href="/">Schools</a> / <a href="/s/{{.School.ID}}">{{.School.Name}}</a> / People</nav>
+<div class="pagehead">
+  <h1>People</h1>
+  <nav class="subnav"><a href="/s/{{.School.ID}}/people.csv?q={{.Filter.Query}}&kind={{.Filter.Kind}}&industry={{.Filter.Industry}}&location={{.Filter.Location}}&grad_year={{if .Filter.GradYear}}{{.Filter.GradYear}}{{end}}&grade={{.Filter.Grade}}">Export this view (CSV)</a></nav>
+</div>
+
+<form method="get" class="filters">
+  <input name="q" value="{{.Filter.Query}}" placeholder="Search name, employer, title…">
+  <select name="kind">
+    <option value="">Everyone</option>
+    {{$k := .Filter.Kind}}{{range kinds}}<option value="{{.}}" {{if eq . $k}}selected{{end}}>{{.Label}}</option>{{end}}
+  </select>
+  <input name="industry" value="{{.Filter.Industry}}" placeholder="Industry">
+  <input name="location" value="{{.Filter.Location}}" placeholder="Location">
+  <input name="grad_year" type="number" value="{{if .Filter.GradYear}}{{.Filter.GradYear}}{{end}}" placeholder="Class of">
+  <select name="grade">
+    <option value="">Any grade</option>
+    {{$g := .Filter.Grade}}{{range grades}}<option value="{{.}}" {{if eq . $g}}selected{{end}}>Grade {{.}}</option>{{end}}
+  </select>
+  <button>Filter</button>
+  <a class="btn quiet" href="/s/{{.School.ID}}/people">Clear</a>
+</form>
+
+<section class="grid two wide-left">
+  <div class="card">
+    <p class="muted small">{{len .People}} people · each row has a private link you can send so they update what they're doing now.</p>
+    {{if .People}}
+    <table class="people">
+      <thead><tr><th>Name</th><th>Kind</th><th>Class / grade</th><th>Now</th><th>Location</th><th></th></tr></thead>
+      <tbody>
+      {{$base := .Base}}
+      {{range .People}}
+      <tr>
+        <td class="strong">{{.Name}}<br><span class="muted small">{{.Email}}</span></td>
+        <td class="muted">{{.Kind.Label}}</td>
+        <td>{{if .GradYear}}’{{printf "%02d" (mod .GradYear 100)}}{{end}}{{if .Grade}} G{{.Grade}}{{end}}</td>
+        <td>{{if .Title}}{{.Title}}{{end}}{{if and .Title .Employer}}, {{end}}{{if .Employer}}{{.Employer}}{{end}}{{if .Industry}}<br><span class="muted small">{{.Industry}}</span>{{end}}</td>
+        <td class="muted">{{.Location}}</td>
+        <td><a class="small" href="/me/{{.ID}}" title="{{$base}}/me/{{.ID}}">profile link</a></td>
+      </tr>
+      {{end}}
+      </tbody>
+    </table>
+    {{else}}<p class="muted">No one matches.</p>{{end}}
+  </div>
+
+  <div class="card">
+    <h2>Add a person</h2>
+    <form method="post" action="/s/{{.School.ID}}/people" class="stack">
+      <label>Kind
+        <select name="kind">{{range kinds}}<option value="{{.}}">{{.Label}}</option>{{end}}</select>
+      </label>
+      <label>Name <input name="name" required></label>
+      <label>Email <input name="email" type="email" required></label>
+      <div class="cols">
+        <label>Class of (alumni) <input name="grad_year" type="number" placeholder="2018"></label>
+        <label>Child's grade (parents)
+          <select name="grade"><option value="">—</option>{{range grades}}<option value="{{.}}">{{.}}</option>{{end}}</select>
+        </label>
+      </div>
+      <label>Job title <input name="title"></label>
+      <label>Employer <input name="employer"></label>
+      <label>Industry <input name="industry"></label>
+      <label>Location <input name="location"></label>
+      <button>Add</button>
+    </form>
+  </div>
+</section>
+{{end}}

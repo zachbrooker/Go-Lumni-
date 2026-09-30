@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -21,7 +22,7 @@ type Memory struct {
 	mu        sync.RWMutex
 	now       func() time.Time
 	schools   map[string]*lumni.School
-	alumni    map[string]*lumni.Alumnus
+	members   map[string]*lumni.Member
 	campaigns map[string]*lumni.Campaign
 	donations map[string][]*lumni.Donation // by campaign ID
 }
@@ -34,7 +35,7 @@ func NewMemory(now func() time.Time) *Memory {
 	return &Memory{
 		now:       now,
 		schools:   map[string]*lumni.School{},
-		alumni:    map[string]*lumni.Alumnus{},
+		members:   map[string]*lumni.Member{},
 		campaigns: map[string]*lumni.Campaign{},
 		donations: map[string][]*lumni.Donation{},
 	}
@@ -85,60 +86,60 @@ func (m *Memory) ListSchools() []lumni.School {
 	return out
 }
 
-// --- Alumni ---
+// --- Members ---
 
 func (m *Memory) emailTaken(schoolID, email, exceptID string) bool {
-	for _, a := range m.alumni {
-		if a.SchoolID == schoolID && a.Email == email && a.ID != exceptID {
+	for _, x := range m.members {
+		if x.SchoolID == schoolID && x.Email == email && x.ID != exceptID {
 			return true
 		}
 	}
 	return false
 }
 
-func (m *Memory) CreateAlumnus(a lumni.Alumnus) (lumni.Alumnus, error) {
-	if err := a.Validate(); err != nil {
-		return lumni.Alumnus{}, err
+func (m *Memory) CreateMember(x lumni.Member) (lumni.Member, error) {
+	if err := x.Validate(); err != nil {
+		return lumni.Member{}, err
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if _, ok := m.schools[a.SchoolID]; !ok {
-		return lumni.Alumnus{}, notFound("school", a.SchoolID)
+	if _, ok := m.schools[x.SchoolID]; !ok {
+		return lumni.Member{}, notFound("school", x.SchoolID)
 	}
-	if m.emailTaken(a.SchoolID, a.Email, "") {
-		return lumni.Alumnus{}, fmt.Errorf("email %q already registered: %w", a.Email, lumni.ErrConflict)
+	if m.emailTaken(x.SchoolID, x.Email, "") {
+		return lumni.Member{}, fmt.Errorf("email %q already registered: %w", x.Email, lumni.ErrConflict)
 	}
-	a.ID = newID("alm")
-	a.CreatedAt = m.now()
-	a.UpdatedAt = a.CreatedAt
-	m.alumni[a.ID] = &a
-	return a, nil
+	x.ID = newID("mem")
+	x.CreatedAt = m.now()
+	x.UpdatedAt = x.CreatedAt
+	m.members[x.ID] = &x
+	return x, nil
 }
 
-func (m *Memory) GetAlumnus(schoolID, id string) (lumni.Alumnus, error) {
+func (m *Memory) GetMember(schoolID, id string) (lumni.Member, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	a, ok := m.alumni[id]
-	if !ok || a.SchoolID != schoolID {
-		return lumni.Alumnus{}, notFound("alumnus", id)
+	x, ok := m.members[id]
+	if !ok || x.SchoolID != schoolID {
+		return lumni.Member{}, notFound("member", id)
 	}
-	return *a, nil
+	return *x, nil
 }
 
-func (m *Memory) UpdateAlumnus(schoolID, id string, p lumni.AlumnusPatch) (lumni.Alumnus, error) {
+func (m *Memory) UpdateMember(schoolID, id string, p lumni.MemberPatch) (lumni.Member, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	cur, ok := m.alumni[id]
+	cur, ok := m.members[id]
 	if !ok || cur.SchoolID != schoolID {
-		return lumni.Alumnus{}, notFound("alumnus", id)
+		return lumni.Member{}, notFound("member", id)
 	}
 	next := *cur
 	p.Apply(&next)
 	if err := next.Validate(); err != nil {
-		return lumni.Alumnus{}, err
+		return lumni.Member{}, err
 	}
 	if m.emailTaken(schoolID, next.Email, id) {
-		return lumni.Alumnus{}, fmt.Errorf("email %q already registered: %w", next.Email, lumni.ErrConflict)
+		return lumni.Member{}, fmt.Errorf("email %q already registered: %w", next.Email, lumni.ErrConflict)
 	}
 	next.UpdatedAt = m.now()
 	*cur = next
@@ -147,32 +148,45 @@ func (m *Memory) UpdateAlumnus(schoolID, id string, p lumni.AlumnusPatch) (lumni
 
 func eqFold(filter, v string) bool { return filter == "" || strings.EqualFold(filter, v) }
 
-// ListAlumni returns a school's alumni matching f, sorted by grad year then name.
-func (m *Memory) ListAlumni(schoolID string, f lumni.AlumniFilter) ([]lumni.Alumnus, error) {
+// ListMembers returns a school's members matching f, sorted by kind, then
+// class year / grade, then name.
+func (m *Memory) ListMembers(schoolID string, f lumni.MemberFilter) ([]lumni.Member, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	if _, ok := m.schools[schoolID]; !ok {
 		return nil, notFound("school", schoolID)
 	}
 	q := strings.ToLower(strings.TrimSpace(f.Query))
-	out := []lumni.Alumnus{}
-	for _, a := range m.alumni {
-		if a.SchoolID != schoolID || !eqFold(f.Industry, a.Industry) || !eqFold(f.Location, a.Location) {
+	out := []lumni.Member{}
+	for _, x := range m.members {
+		if x.SchoolID != schoolID || !eqFold(f.Industry, x.Industry) || !eqFold(f.Location, x.Location) {
 			continue
 		}
-		if f.GradYear != 0 && f.GradYear != a.GradYear {
+		if f.Kind != "" && f.Kind != x.Kind {
+			continue
+		}
+		if f.GradYear != 0 && f.GradYear != x.GradYear {
+			continue
+		}
+		if f.Grade != "" && !strings.EqualFold(f.Grade, x.Grade) {
 			continue
 		}
 		if q != "" {
-			hay := strings.ToLower(strings.Join([]string{a.Name, a.Employer, a.Title, a.Bio}, " "))
+			hay := strings.ToLower(strings.Join([]string{x.Name, x.Employer, x.Title, x.Bio}, " "))
 			if !strings.Contains(hay, q) {
 				continue
 			}
 		}
-		out = append(out, *a)
+		out = append(out, *x)
 	}
-	slices.SortFunc(out, func(x, y lumni.Alumnus) int {
-		return cmp.Or(cmp.Compare(x.GradYear, y.GradYear), cmp.Compare(x.Name, y.Name))
+	kindRank := func(k lumni.MemberKind) int { return slices.Index(lumni.Kinds, k) }
+	slices.SortFunc(out, func(a, b lumni.Member) int {
+		return cmp.Or(
+			cmp.Compare(kindRank(a.Kind), kindRank(b.Kind)),
+			cmp.Compare(a.GradYear, b.GradYear),
+			cmp.Compare(lumni.GradeIndex(a.Grade), lumni.GradeIndex(b.Grade)),
+			cmp.Compare(a.Name, b.Name),
+		)
 	})
 	return out, nil
 }
@@ -184,6 +198,10 @@ func cloneCampaign(c *lumni.Campaign) lumni.Campaign {
 	if c.Match != nil {
 		mt := *c.Match
 		out.Match = &mt
+	}
+	out.Challenges = slices.Clone(c.Challenges)
+	if out.Challenges == nil {
+		out.Challenges = []lumni.Challenge{}
 	}
 	out.Updates = slices.Clone(c.Updates)
 	if out.Updates == nil {
@@ -203,7 +221,13 @@ func (m *Memory) CreateCampaign(c lumni.Campaign) (lumni.Campaign, error) {
 	}
 	c.ID = newID("cmp")
 	c.Status = lumni.StatusActive
-	c.RaisedCents, c.DonorCount, c.Updates = 0, 0, nil
+	c.RaisedCents, c.BonusCents, c.DonorCount, c.Updates = 0, 0, 0, nil
+	c.Challenges = slices.Clone(c.Challenges)
+	for i := range c.Challenges {
+		c.Challenges[i].ID = newID("chl")
+		c.Challenges[i].Progress = 0
+		c.Challenges[i].UnlockedAt = time.Time{}
+	}
 	c.CreatedAt = m.now()
 	m.campaigns[c.ID] = &c
 	return cloneCampaign(&c), nil
@@ -235,6 +259,23 @@ func (m *Memory) ListCampaigns(schoolID string) ([]lumni.Campaign, error) {
 	return out, nil
 }
 
+// AddChallenge attaches a challenge to a campaign. Earlier gifts do not count toward it.
+func (m *Memory) AddChallenge(campaignID string, ch lumni.Challenge) (lumni.Campaign, error) {
+	if err := ch.Validate(); err != nil {
+		return lumni.Campaign{}, err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	c, ok := m.campaigns[campaignID]
+	if !ok {
+		return lumni.Campaign{}, notFound("campaign", campaignID)
+	}
+	ch.ID = newID("chl")
+	ch.Progress, ch.UnlockedAt = 0, time.Time{}
+	c.Challenges = append(c.Challenges, ch)
+	return cloneCampaign(c), nil
+}
+
 func (m *Memory) PostUpdate(campaignID, body string) (lumni.Campaign, error) {
 	body = strings.TrimSpace(body)
 	if body == "" {
@@ -263,8 +304,9 @@ func (m *Memory) CloseCampaign(campaignID string) (lumni.Campaign, error) {
 
 // --- Donations ---
 
-// Donate records a gift and applies any sponsor match that has room left.
-// When AlumnusID is set, the donor name defaults to the alumnus's name.
+// Donate records a gift, applies any sponsor match with room left, and
+// advances (and possibly unlocks) the campaign's challenges. When MemberID
+// is set, the donor name defaults to the member's name.
 func (m *Memory) Donate(campaignID string, d lumni.Donation) (lumni.Donation, error) {
 	if err := d.Validate(); err != nil {
 		return lumni.Donation{}, err
@@ -279,26 +321,65 @@ func (m *Memory) Donate(campaignID string, d lumni.Donation) (lumni.Donation, er
 	if !c.Open(now) {
 		return lumni.Donation{}, fmt.Errorf("campaign is not accepting donations: %w", lumni.ErrConflict)
 	}
-	if d.AlumnusID != "" {
-		a, ok := m.alumni[d.AlumnusID]
-		if !ok || a.SchoolID != c.SchoolID {
-			return lumni.Donation{}, notFound("alumnus", d.AlumnusID)
+	// A gift with only an email is linked to the member with that email, so
+	// a shared "give" link still tells the school which alumni gave.
+	if d.MemberID == "" && d.DonorEmail != "" {
+		for _, x := range m.members {
+			if x.SchoolID == c.SchoolID && x.Email == d.DonorEmail {
+				d.MemberID = x.ID
+				break
+			}
 		}
+	}
+	var member lumni.Member
+	isMember := d.MemberID != ""
+	if isMember {
+		x, ok := m.members[d.MemberID]
+		if !ok || x.SchoolID != c.SchoolID {
+			return lumni.Donation{}, notFound("member", d.MemberID)
+		}
+		member = *x
 		if d.DonorName == "" {
-			d.DonorName = a.Name
+			d.DonorName = member.Name
 		}
+		if d.DonorEmail == "" {
+			d.DonorEmail = member.Email
+		}
+		d.DonorKind = member.Kind.Label()
+	} else {
+		d.DonorKind = ""
 	}
 
 	d.ID = newID("don")
 	d.CampaignID = campaignID
 	d.CreatedAt = now
 	d.MatchedCents = 0
+	d.FeeCents = lumni.Fee(d.AmountCents)
 	if c.Match != nil {
 		d.MatchedCents = min(d.AmountCents, c.Match.CapCents-c.Match.UsedCents)
 		c.Match.UsedCents += d.MatchedCents
 	}
 	c.RaisedCents += d.AmountCents + d.MatchedCents
+	c.BonusCents += d.MatchedCents
 	c.DonorCount++
+
+	for i := range c.Challenges {
+		ch := &c.Challenges[i]
+		if ch.Unlocked() || !ch.Counts(now, member, isMember) {
+			continue
+		}
+		if ch.Metric == lumni.MetricDollars {
+			ch.Progress += d.AmountCents
+		} else {
+			ch.Progress++
+		}
+		if ch.Progress >= ch.Threshold {
+			ch.UnlockedAt = now
+			c.RaisedCents += ch.RewardCents
+			c.BonusCents += ch.RewardCents
+		}
+	}
+
 	m.donations[campaignID] = append(m.donations[campaignID], &d)
 	return d, nil
 }
@@ -318,37 +399,107 @@ func (m *Memory) ListDonations(campaignID string) ([]lumni.Donation, error) {
 	return out, nil
 }
 
-// Leaderboard ranks graduating classes by how much they have given to a campaign.
-// Only donations tied to an alumnus count toward a class.
-func (m *Memory) Leaderboard(campaignID string) ([]lumni.ClassStanding, error) {
+// SchoolDonations returns every gift to a school's campaigns, newest first,
+// unredacted, for the school's own records (donor names and emails included).
+func (m *Memory) SchoolDonations(schoolID string) ([]lumni.Donation, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	if _, ok := m.campaigns[campaignID]; !ok {
+	if _, ok := m.schools[schoolID]; !ok {
+		return nil, notFound("school", schoolID)
+	}
+	out := []lumni.Donation{}
+	for id, c := range m.campaigns {
+		if c.SchoolID != schoolID {
+			continue
+		}
+		for _, d := range m.donations[id] {
+			out = append(out, *d)
+		}
+	}
+	slices.SortFunc(out, func(a, b lumni.Donation) int { return b.CreatedAt.Compare(a.CreatedAt) })
+	return out, nil
+}
+
+// Leaderboard ranks groups of the community by giving to a campaign.
+// by is lumni.ByClass (alumni and alumni parents, by class year) or
+// lumni.ByGrade (current parents and grandparents, by child's grade).
+// Members of every matching group are counted so participation can be shown,
+// even for groups with no gifts yet. Rows are sorted by participation, then dollars.
+func (m *Memory) Leaderboard(campaignID, by string) ([]lumni.Standing, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	c, ok := m.campaigns[campaignID]
+	if !ok {
 		return nil, notFound("campaign", campaignID)
 	}
-	byYear := map[int]*lumni.ClassStanding{}
-	donors := map[int]map[string]bool{}
+	key := func(x lumni.Member) (string, bool) {
+		switch by {
+		case lumni.ByClass:
+			if (x.Kind == lumni.KindAlumnus || x.Kind == lumni.KindAlumniParent) && x.GradYear != 0 {
+				return strconv.Itoa(x.GradYear), true
+			}
+		case lumni.ByGrade:
+			if (x.Kind == lumni.KindParent || x.Kind == lumni.KindGrandparent) && x.Grade != "" {
+				return x.Grade, true
+			}
+		}
+		return "", false
+	}
+	rows := map[string]*lumni.Standing{}
+	row := func(k string) *lumni.Standing {
+		r := rows[k]
+		if r == nil {
+			r = &lumni.Standing{Key: k, Label: lumni.Segment(by + ":" + k).Label()}
+			rows[k] = r
+		}
+		return r
+	}
+	for _, x := range m.members {
+		if x.SchoolID != c.SchoolID {
+			continue
+		}
+		if k, ok := key(*x); ok {
+			row(k).Members++
+		}
+	}
+	donors := map[string]map[string]bool{}
 	for _, d := range m.donations[campaignID] {
-		a, ok := m.alumni[d.AlumnusID]
+		x, ok := m.members[d.MemberID]
 		if !ok {
 			continue
 		}
-		row := byYear[a.GradYear]
-		if row == nil {
-			row = &lumni.ClassStanding{GradYear: a.GradYear}
-			byYear[a.GradYear] = row
-			donors[a.GradYear] = map[string]bool{}
+		k, ok := key(*x)
+		if !ok {
+			continue
 		}
-		row.RaisedCents += d.AmountCents
-		donors[a.GradYear][a.ID] = true
-		row.Donors = len(donors[a.GradYear])
+		r := row(k)
+		r.RaisedCents += d.AmountCents
+		if donors[k] == nil {
+			donors[k] = map[string]bool{}
+		}
+		donors[k][x.ID] = true
+		r.Donors = len(donors[k])
 	}
-	out := make([]lumni.ClassStanding, 0, len(byYear))
-	for _, row := range byYear {
-		out = append(out, *row)
+	out := make([]lumni.Standing, 0, len(rows))
+	for _, r := range rows {
+		if r.Members > 0 {
+			r.Participation = float64(r.Donors) / float64(r.Members) * 100
+		}
+		out = append(out, *r)
 	}
-	slices.SortFunc(out, func(a, b lumni.ClassStanding) int {
-		return cmp.Or(cmp.Compare(b.RaisedCents, a.RaisedCents), cmp.Compare(a.GradYear, b.GradYear))
+	sortKey := func(s lumni.Standing) int {
+		if by == lumni.ByGrade {
+			return lumni.GradeIndex(s.Key)
+		}
+		n, _ := strconv.Atoi(s.Key)
+		return n
+	}
+	slices.SortFunc(out, func(a, b lumni.Standing) int {
+		return cmp.Or(
+			cmp.Compare(b.Participation, a.Participation),
+			cmp.Compare(b.RaisedCents, a.RaisedCents),
+			cmp.Compare(sortKey(a), sortKey(b)),
+		)
 	})
 	return out, nil
 }
@@ -357,7 +508,7 @@ func (m *Memory) Leaderboard(campaignID string) ([]lumni.ClassStanding, error) {
 
 const topEmployers = 5
 
-// Insights summarizes where a school's alumni are and how they give.
+// Insights summarizes a school's community and how it gives.
 func (m *Memory) Insights(schoolID string) (lumni.Insights, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -365,26 +516,35 @@ func (m *Memory) Insights(schoolID string) (lumni.Insights, error) {
 		return lumni.Insights{}, notFound("school", schoolID)
 	}
 	in := lumni.Insights{
-		ByIndustry:   map[string]int{},
-		ByLocation:   map[string]int{},
-		ByGradYear:   map[int]int{},
-		TopEmployers: []lumni.Count{},
+		ByKind:            map[lumni.MemberKind]int{},
+		ByIndustry:        map[string]int{},
+		ByLocation:        map[string]int{},
+		ByGradYear:        map[int]int{},
+		ByGrade:           map[string]int{},
+		TopEmployers:      []lumni.Count{},
+		RaisedByKindCents: map[lumni.MemberKind]int64{},
 	}
 	employers := map[string]int{}
-	for _, a := range m.alumni {
-		if a.SchoolID != schoolID {
+	for _, x := range m.members {
+		if x.SchoolID != schoolID {
 			continue
 		}
-		in.TotalAlumni++
-		in.ByGradYear[a.GradYear]++
-		if a.Industry != "" {
-			in.ByIndustry[a.Industry]++
+		in.TotalMembers++
+		in.ByKind[x.Kind]++
+		if x.GradYear != 0 {
+			in.ByGradYear[x.GradYear]++
 		}
-		if a.Location != "" {
-			in.ByLocation[a.Location]++
+		if x.Grade != "" {
+			in.ByGrade[x.Grade]++
 		}
-		if a.Employer != "" {
-			employers[a.Employer]++
+		if x.Industry != "" {
+			in.ByIndustry[x.Industry]++
+		}
+		if x.Location != "" {
+			in.ByLocation[x.Location]++
+		}
+		if x.Employer != "" {
+			employers[x.Employer]++
 		}
 	}
 	for name, n := range employers {
@@ -396,7 +556,7 @@ func (m *Memory) Insights(schoolID string) (lumni.Insights, error) {
 	in.TopEmployers = in.TopEmployers[:min(len(in.TopEmployers), topEmployers)]
 
 	now := m.now()
-	givers := map[string]bool{}
+	givers := map[string]lumni.MemberKind{}
 	for _, c := range m.campaigns {
 		if c.SchoolID != schoolID {
 			continue
@@ -406,14 +566,26 @@ func (m *Memory) Insights(schoolID string) (lumni.Insights, error) {
 			in.ActiveCampaigns++
 		}
 		for _, d := range m.donations[c.ID] {
-			if d.AlumnusID != "" {
-				givers[d.AlumnusID] = true
+			in.PlatformFeeCents += d.FeeCents
+			if x, ok := m.members[d.MemberID]; ok {
+				givers[x.ID] = x.Kind
+				in.RaisedByKindCents[x.Kind] += d.AmountCents
 			}
 		}
 	}
-	in.AlumniDonors = len(givers)
-	if in.TotalAlumni > 0 {
-		in.ParticipationRate = float64(in.AlumniDonors) / float64(in.TotalAlumni) * 100
+	in.Donors = len(givers)
+	byKindGivers := map[lumni.MemberKind]int{}
+	for _, k := range givers {
+		byKindGivers[k]++
 	}
+	rate := func(n, total int) float64 {
+		if total == 0 {
+			return 0
+		}
+		return float64(n) / float64(total) * 100
+	}
+	in.ParticipationRate = rate(in.Donors, in.TotalMembers)
+	in.AlumniParticipation = rate(byKindGivers[lumni.KindAlumnus], in.ByKind[lumni.KindAlumnus])
+	in.ParentParticipation = rate(byKindGivers[lumni.KindParent], in.ByKind[lumni.KindParent])
 	return in, nil
 }

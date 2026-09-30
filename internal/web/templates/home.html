@@ -1,0 +1,25 @@
+{{define "content"}}
+<section class="hero">
+  <p class="eyebrow">For schools that know their people</p>
+  <h1>Every alum. Every parent.<br>What they do, and what they give.</h1>
+  <p class="lede">Lumni is the school's single view of its community, and the fastest way for that community to give back, from a $100 gift to a seven-figure one.</p>
+</section>
+
+<section class="grid two">
+  <div class="card">
+    <h2>Schools</h2>
+    {{if .}}
+    <ul class="list">
+      {{range .}}<li><a href="/s/{{.ID}}">{{.Name}}</a><span class="muted small">Open dashboard →</span></li>{{end}}
+    </ul>
+    {{else}}<p class="muted">No schools yet. Add one to get started.</p>{{end}}
+  </div>
+  <div class="card">
+    <h2>Add a school</h2>
+    <form method="post" action="/schools" class="stack">
+      <label>Name <input name="name" required placeholder="Sierra Canyon School"></label>
+      <button>Create school</button>
+    </form>
+  </div>
+</section>
+{{end}}
