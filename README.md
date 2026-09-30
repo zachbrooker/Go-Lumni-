@@ -78,7 +78,17 @@ internal/api/     JSON API handlers
 internal/web/     HTML pages, templates and stylesheet
 ```
 
+## Alumni enrichment (the wedge)
+
+Most schools have a list of graduates and little else. The plan: the school hands Lumni its names (a spreadsheet, or "Class of 2012"), and Lumni comes back with where each person is now, what they do, and how to reach them, then loads them into the directory.
+
+- Sources: licensed professional-data providers (e.g. People Data Labs, Clearbit-style APIs), public profiles, press. No scraping of sites whose terms forbid it.
+- Each match carries a confidence score and its sources. Anything under ~90% gets a human check before the school sees it.
+- Output lands as members in the directory with `title`, `employer`, `industry`, `location` and an email flagged verified or unverified, plus the `/me/…` link so the person can correct it themselves.
+- Not built in this repo yet; it is a service around the store, not a change to it. The interactive demo shows the intended flow on its "Find" screen.
+
 ## Next steps
+- Alumni enrichment service (above), starting with a CSV in / CSV out pilot for one class year
 
 - Real payments (Stripe) with receipts, so a pilot can take real money
 - Logins and roles, so school-only pages and admin actions are protected
